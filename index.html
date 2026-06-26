@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="es">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>LecheFinder</title>
+        <style>
+            :root {
+                --bg: #e8f4f8;
+                --surface: #ffffff;
+                --border: #b8d4e8;
+                --text: #1a3a4a;
+                --text-secondary: #5a7a8a;
+                --primary: #4a9bbf;
+                --primary-light: #a8d4e8;
+                --error-bg: #fef2f2;
+                --error-border: #fca5a5;
+                --error-text: #dc2626;
+                --radius: 12px;
+                --shadow: 0 2px 10px rgba(74, 155, 191, 0.1);
+            }
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+            body {
+                font-family:
+                    system-ui,
+                    -apple-system,
+                    sans-serif;
+                background: var(--bg);
+                color: var(--text);
+                line-height: 1.5;
+                padding: 2rem 1rem;
+            }
+            .container {
+                max-width: 1120px;
+                margin: 0 auto;
+            }
+            .logo {
+                display: block;
+                margin: 0 auto 1.25rem;
+                max-height: 200px;
+                width: auto;
+            }
+            .subtitle {
+                text-align: center;
+                color: var(--text-secondary);
+                font-size: 0.875rem;
+                margin-bottom: 1.5rem;
+            }
+            .table-wrap {
+                overflow-x: auto;
+                border-radius: var(--radius);
+                border: 1px solid var(--border);
+                box-shadow: var(--shadow);
+                background: var(--surface);
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                background: var(--surface);
+                min-width: 600px;
+            }
+            th,
+            td {
+                padding: 0.75rem 1rem;
+                text-align: left;
+                border-bottom: 1px solid var(--border);
+                white-space: nowrap;
+            }
+            th {
+                background: var(--primary-light);
+                font-weight: 600;
+                font-size: 0.8125rem;
+                text-transform: uppercase;
+                letter-spacing: 0.025em;
+                color: var(--text);
+                position: sticky;
+                top: 0;
+            }
+            tr:last-child td {
+                border-bottom: none;
+            }
+            tbody tr:hover {
+                background: #f0f8fc;
+            }
+            .price {
+                font-variant-numeric: tabular-nums;
+                text-align: right;
+                font-weight: 600;
+            }
+            .price small {
+                font-weight: 400;
+                font-size: 0.75rem;
+            }
+            .badge {
+                display: inline-block;
+                padding: 0.125rem 0.5rem;
+                border-radius: 999px;
+                font-size: 0.6875rem;
+                font-weight: 600;
+                color: #fff;
+                white-space: nowrap;
+            }
+            .link {
+                color: var(--primary);
+                text-decoration: none;
+                font-weight: 500;
+                font-size: 0.875rem;
+            }
+            .link:hover {
+                text-decoration: underline;
+            }
+            .error {
+                background: var(--error-bg);
+                border: 1px solid var(--error-border);
+                color: var(--error-text);
+                padding: 0.625rem 0.875rem;
+                border-radius: var(--radius);
+                margin-bottom: 0.5rem;
+                font-size: 0.875rem;
+            }
+            .loader {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                padding: 4rem 0;
+                gap: 1rem;
+            }
+            .spinner {
+                width: 2rem;
+                height: 2rem;
+                border: 3px solid var(--border);
+                border-top-color: var(--primary);
+                border-radius: 50%;
+                animation: spin 0.6s linear infinite;
+            }
+            @keyframes spin {
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+            .empty {
+                text-align: center;
+                padding: 3rem 0;
+                color: var(--text-secondary);
+            }
+            .footer {
+                text-align: center;
+                font-size: 0.75rem;
+                color: var(--text-secondary);
+                margin-top: 1.5rem;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="app"></div>
+
+        <script type="importmap">
+            {
+                "imports": {
+                    "preact": "https://cdn.jsdelivr.net/npm/preact@10.29.2/+esm",
+                    "preact/hooks": "https://cdn.jsdelivr.net/npm/preact@10.29.2/hooks/+esm",
+                    "htm": "https://cdn.jsdelivr.net/npm/htm@3.1.1/+esm"
+                }
+            }
+        </script>
+
+        <script type="module">
+            import { h, render } from "preact";
+            import { useState, useEffect } from "preact/hooks";
+            import htm from "htm";
+
+            const html = htm.bind(h);
+
+            const PROXY_URL = "https://corsproxy.io/?url=";
+
+            const COMERCIOS = [
+                {
+                    id: "masonline",
+                    nombre: "MasOnline",
+                    baseUrl: "https://www.masonline.com.ar",
+                    url: "https://www.masonline.com.ar/api/catalog_system/pub/products/search?ft=leche&fq=C:/200066/300297/&_from=0&_to=19&O=OrderByPriceASC",
+                    necesitaProxy: true,
+                    parser: "vtex",
+                },
+                {
+                    id: "carrefour",
+                    nombre: "Carrefour",
+                    baseUrl: "https://www.carrefour.com.ar",
+                    url: "https://www.carrefour.com.ar/api/catalog_system/pub/products/search?ft=leche&fq=C:/292/293/&_from=0&_to=19&O=OrderByPriceASC",
+                    necesitaProxy: true,
+                    parser: "vtex",
+                },
+                {
+                    id: "dia",
+                    nombre: "Día Online",
+                    baseUrl: "https://diaonline.supermercadosdia.com.ar",
+                    url: "https://diaonline.supermercadosdia.com.ar/api/catalog_system/pub/products/search?ft=leche&fq=C:/121/132/&_from=0&_to=19&O=OrderByPriceASC",
+                    necesitaProxy: true,
+                    parser: "vtex",
+                },
+                {
+                    id: "coto",
+                    nombre: "Coto Digital",
+                    baseUrl: "https://www.coto.com.ar",
+                    url: 'https://api.coto.com.ar/api/v1/ms-digital-sitio-bff-web/api/v1/products/search/leche?filters[group_id]=catv00003266&sort_by=price&sort_order=ascending&page=1&num_results_per_page=24&pre_filter_expression={"name":"store_availability","value":"200"}',
+                    necesitaProxy: true,
+                    parser: "coto",
+                },
+            ];
+
+            function extraerPromocion(item) {
+                const offer = item?.items?.[0]?.sellers?.[0]?.commertialOffer;
+                if (!offer) return null;
+
+                if (offer.Teasers?.length > 0) {
+                    const t = offer.Teasers[0];
+                    return t["<Name>k__BackingField"] || t.Name || null;
+                }
+
+                if (offer.PromotionTeasers?.length > 0) {
+                    const t = offer.PromotionTeasers[0];
+                    return t.Name || t["<Name>k__BackingField"] || null;
+                }
+
+                return null;
+            }
+
+            function parseVTEX(raw, comercio) {
+                if (!Array.isArray(raw)) return [];
+
+                return raw.map((item) => {
+                    const seller = item?.items?.[0]?.sellers?.[0];
+                    const offer = seller?.commertialOffer;
+                    const link = item.link;
+                    const enlace = link?.startsWith("http")
+                        ? link
+                        : link
+                          ? comercio.baseUrl.replace(/\/+$/, "") +
+                            "/" +
+                            link.replace(/^\//, "")
+                          : comercio.baseUrl;
+
+                    return {
+                        comercio: comercio.nombre,
+                        producto: item.productName || "—",
+                        precio: offer?.Price ?? 0,
+                        listPrice: offer?.ListPrice ?? 0,
+                        promocion: extraerPromocion(item),
+                        enlace,
+                    };
+                });
+            }
+
+            function parseCoto(raw, comercio) {
+                try {
+                    const results = raw?.results || raw?.data || [];
+                    if (Array.isArray(results)) {
+                        return results.map((r) => {
+                            const d = r.data || r;
+                            return {
+                                comercio: comercio.nombre,
+                                producto:
+                                    d.name || d.productName || d.nombre || "—",
+                                precio: d.price ?? d.Price ?? d.precio ?? 0,
+                                listPrice:
+                                    d.listPrice ??
+                                    d.ListPrice ??
+                                    d.precio_lista ??
+                                    0,
+                                promocion: d.promotion || d.Promotion || null,
+                                enlace: d.url || d.link || comercio.baseUrl,
+                            };
+                        });
+                    }
+                    return [];
+                } catch {
+                    return [];
+                }
+            }
+
+            const PARSERS = { vtex: parseVTEX, coto: parseCoto };
+
+            const EXCLUIR = [
+                // /dulce de leche/i, /chocolate con leche/i, /chocolate blanco/i,
+                // /arroz con leche/i, /alfajor/i, /tableta/i, /flan/i,
+                // /caramelo/i, /gallet/i, /leche condensada/i, /leche en polvo/i,
+                // /crema de leche/i, /leche de almendras/i, /leche de soja/i,
+                // /leche de coco/i, /leche evaporada/i, /postre.*leche/i,
+                // /budin.*leche/i, /batido.*leche/i,
+                // /infantil/i, /chocolatada/i, /200\s*(ml|cc)/i,
+                /(gato|perro|gatitos?|cachorros?).*leche/i,
+                /pollo y leche/i,
+            ];
+
+            function esLeche(producto) {
+                const nombre = (producto.producto || "")
+                    .toLowerCase()
+                    .normalize("NFD")
+                    .replace(/[\u0300-\u036f]/g, "");
+                if (!/leche/.test(nombre)) return false;
+                return !EXCLUIR.some((p) => p.test(nombre));
+            }
+
+            async function fetchComercio(comercio) {
+                const url = comercio.necesitaProxy
+                    ? PROXY_URL + encodeURIComponent(comercio.url)
+                    : comercio.url;
+
+                const res = await fetch(url, {
+                    headers: { Accept: "application/json" },
+                });
+
+                if (!res.ok) {
+                    throw new Error(
+                        "Error " +
+                            res.status +
+                            (res.statusText ? " " + res.statusText : ""),
+                    );
+                }
+
+                const data = await res.json();
+                const parser = PARSERS[comercio.parser] || parseVTEX;
+                return parser(data, comercio);
+            }
+
+            async function fetchTodos() {
+                const results = await Promise.allSettled(
+                    COMERCIOS.map((c) => fetchComercio(c)),
+                );
+
+                const products = [];
+                const errors = [];
+
+                results.forEach((r, i) => {
+                    const c = COMERCIOS[i];
+                    if (r.status === "fulfilled") {
+                        products.push(...r.value.filter(esLeche));
+                    } else {
+                        const msg = r.reason?.message || String(r.reason);
+                        errors.push({ comercio: c.nombre, mensaje: msg });
+                    }
+                });
+
+                products.sort(
+                    (a, b) =>
+                        a.precio - b.precio ||
+                        a.comercio.localeCompare(b.comercio),
+                );
+
+                return { products, errors };
+            }
+
+            const BADGE_COLORS = {
+                MasOnline: "#9b59b6",
+                Carrefour: "#4a9bbf",
+                "Día Online": "#7dcea0",
+                "Coto Digital": "#e67e7e",
+            };
+
+            function Badge({ nombre }) {
+                return html`<span
+                    class="badge"
+                    style=${{
+                        backgroundColor: BADGE_COLORS[nombre] || "#6b7280",
+                    }}
+                    >${nombre}</span
+                >`;
+            }
+
+            function formatearPrecio(n) {
+                return (
+                    "$" +
+                    Number(n).toLocaleString("es-AR", {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
+                    })
+                );
+            }
+
+            function App() {
+                const [products, setProducts] = useState([]);
+                const [errors, setErrors] = useState([]);
+                const [loading, setLoading] = useState(true);
+
+                useEffect(() => {
+                    fetchTodos().then(({ products, errors }) => {
+                        setProducts(products);
+                        setErrors(errors);
+                        setLoading(false);
+                    });
+                }, []);
+
+                if (loading) {
+                    return html`
+                        <div class="container">
+                            <img
+                                src="logo.gif"
+                                alt="LecheFinder"
+                                class="logo"
+                            />
+                            <p class="subtitle">
+                                Consultando precios en 4 supermercados...
+                            </p>
+                            <div class="loader">
+                                <div class="spinner"></div>
+                                <span
+                                    style=${{
+                                        color: "var(--text-secondary)",
+                                        fontSize: ".875rem",
+                                    }}
+                                    >Buscando la leche más barata</span
+                                >
+                            </div>
+                        </div>
+                    `;
+                }
+
+                return html`
+                    <div class="container">
+                        <img src="logo.gif" alt="LecheFinder" class="logo" />
+                        <p class="subtitle">
+                            ${products.length}
+                            producto${products.length !== 1 ? "s" : ""}
+                            ${errors.length > 0
+                                ? "· " +
+                                  errors.length +
+                                  " comercio" +
+                                  (errors.length !== 1 ? "s" : "") +
+                                  " con error"
+                                : "· los 4 comercios respondieron"}
+                        </p>
+
+                        ${errors.map(
+                            (e) => html`
+                                <div class="error">
+                                    <strong>${e.comercio}:</strong> ${e.mensaje}
+                                </div>
+                            `,
+                        )}
+                        ${products.length > 0
+                            ? html`
+                                  <div class="table-wrap">
+                                      <table>
+                                          <thead>
+                                              <tr>
+                                                  <th>Comercio</th>
+                                                  <th>Producto</th>
+                                                  <th
+                                                      style=${{
+                                                          textAlign: "right",
+                                                      }}
+                                                  >
+                                                      Precio
+                                                  </th>
+                                                  <th>Promoción</th>
+                                                  <th>Enlace</th>
+                                              </tr>
+                                          </thead>
+                                          <tbody>
+                                              ${products.map(
+                                                  (p) => html`
+                                                      <tr
+                                                          key=${p.enlace +
+                                                          p.producto}
+                                                      >
+                                                          <td>
+                                                              <${Badge}
+                                                                  nombre=${p.comercio}
+                                                              />
+                                                          </td>
+                                                          <td>${p.producto}</td>
+                                                          <td class="price">
+                                                              ${formatearPrecio(
+                                                                  p.precio,
+                                                              )}
+                                                              ${p.listPrice >
+                                                              p.precio
+                                                                  ? html`<br /><small
+                                                                            style=${{
+                                                                                color: "var(--text-secondary)",
+                                                                                textDecoration:
+                                                                                    "line-through",
+                                                                            }}
+                                                                            >${formatearPrecio(
+                                                                                p.listPrice,
+                                                                            )}</small
+                                                                        >`
+                                                                  : null}
+                                                          </td>
+                                                          <td>
+                                                              ${p.promocion ||
+                                                              "—"}
+                                                          </td>
+                                                          <td>
+                                                              <a
+                                                                  href=${p.enlace}
+                                                                  target="_blank"
+                                                                  rel="noopener noreferrer"
+                                                                  class="link"
+                                                                  >Ver →</a
+                                                              >
+                                                          </td>
+                                                      </tr>
+                                                  `,
+                                              )}
+                                          </tbody>
+                                      </table>
+                                  </div>
+                              `
+                            : html`<p class="empty">
+                                  No se encontraron productos de leche.
+                              </p>`}
+
+                        <p class="footer">
+                            Los precios se consultan al cargar la pagina ·
+                            ${errors.length === 0
+                                ? "Sin errores"
+                                : errors.length + " error(es) reportado(s)"}
+                        </p>
+                    </div>
+                `;
+            }
+
+            render(html`<${App} />`, document.getElementById("app"));
+        </script>
+    </body>
+</html>
